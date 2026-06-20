@@ -131,7 +131,7 @@
         <label class="mo-check"><input type="checkbox" id="lblToggle" checked> BCR numbers</label>
       </div>
     </div>
-    <svg class="legend" id="legend" viewBox="0 0 320 46" style="max-width:340px"></svg>
+    <svg class="legend" id="legend" viewBox="0 0 320 52" style="max-width:340px"></svg>
     <div class="regionbtns" id="regionbtns"></div>
   </div>
   <div class="panelcol">
@@ -298,15 +298,15 @@ svg.call(zoom).on("dblclick.zoom",null);
 d3.select("#zoomIn").on("click",()=>svg.transition().duration(200).call(zoom.scaleBy,1.5));
 d3.select("#zoomOut").on("click",()=>svg.transition().duration(200).call(zoom.scaleBy,1/1.5));
 d3.select("#zoomReset").on("click",()=>svg.transition().duration(250).call(zoom.transform,d3.zoomIdentity));
-const lg=d3.select("#legend"); const lw=220, lx=10, ly=10;
+const lg=d3.select("#legend"); const lw=220, lx=10, ly=22;
 const grad=lg.append("defs").append("linearGradient").attr("id","grad");
 d3.range(0,1.01,0.1).forEach(t=>grad.append("stop").attr("offset",(t*100)+"%")
   .attr("stop-color",color(cmin-3+t*(cmax-(cmin-3)))));
+lg.append("text").attr("x",lx).attr("y",12).text("BCC taxa per region");
 lg.append("rect").attr("x",lx).attr("y",ly).attr("width",lw).attr("height",12).attr("fill","url(#grad)")
   .attr("stroke","#ccc").attr("stroke-width",.5);
-lg.append("text").attr("x",lx).attr("y",ly+28).text(cmin);
-lg.append("text").attr("x",lx+lw).attr("y",ly+28).attr("text-anchor","end").text(cmax);
-lg.append("text").attr("x",lx).attr("y",ly-3).text("BCC taxa per region");
+lg.append("text").attr("x",lx).attr("y",ly+24).text(cmin);
+lg.append("text").attr("x",lx+lw).attr("y",ly+24).attr("text-anchor","end").text(cmax);
 
 // region chips for AK + marine (no geometry) and a "mapped" note
 const mappedCodes=new Set(GEO.features.map(f=>f.properties.code));
@@ -360,12 +360,12 @@ function renderSpecies(){
     .on("click",()=>{filterStatus=null;renderSpecies();});
   // header count line reflects the active filter
   if(isScale){
-    d3.select("#pct").text(`${r.species.length} BCC 2021 taxa listed at this scale`);
+    d3.select("#pct").text(`${r.species.length} BCC taxa listed at this scale`);
   }else if(filterStatus){
     const shown=filterStatus==="nb"?nNB:nB;
     d3.select("#pct").text(`${shown} ${filterStatus==="nb"?"nonbreeding":"breeding"} of ${r.species.length} taxa`);
   }else{
-    d3.select("#pct").text(`${r.species.length} BCC 2021 taxa designated`);
+    d3.select("#pct").text(`${r.species.length} BCC taxa designated`);
   }
   // build list, applying status filter (only for X/nb lists), sort, and search highlight
   const q=(d3.select("#search").property("value")||"").trim().toLowerCase();
