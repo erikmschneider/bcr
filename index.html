@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Birds of Conservation Concern 2021 by BCR</title>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#ffffff; --ink:#1d2733; --muted:#5b6b7b; --line:#e3e8ee;
@@ -59,8 +60,16 @@
   .city{fill:#c0245f;stroke:#fff;stroke-width:.8;pointer-events:none}
   .citylbl{font-size:7.5px;font-weight:600;fill:#1d2733;pointer-events:none;
            paint-order:stroke;stroke:#fff;stroke-width:2.2px;stroke-linejoin:round}
-  #search{flex:1;min-width:180px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px}
+  .searchbox{position:relative;flex:1;min-width:180px}
+  #search{width:100%;box-sizing:border-box;padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px}
   #search:focus{outline:none;border-color:var(--accent)}
+  .suggest{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--line);
+    border-radius:10px;box-shadow:0 8px 22px rgba(0,0,0,.13);max-height:300px;overflow:auto;z-index:30;display:none;padding:4px}
+  .sugg-item{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13.5px}
+  .sugg-item:hover,.sugg-item.active{background:#eef3fb}
+  .sugg-nm{color:var(--ink)}
+  .sugg-ct{color:var(--muted);font-size:11.5px;white-space:nowrap}
   .searchnote{font-size:12px;color:var(--muted);min-height:16px}
   svg{width:100%;height:auto;display:block}
   .bcr{stroke:#fff;stroke-width:.7;cursor:pointer;transition:opacity .1s}
@@ -82,7 +91,11 @@
   .chip:hover{border-color:var(--accent)}
   .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .panel{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
-  .phead{padding:13px 15px;border-bottom:1px solid var(--line);background:#fff}
+  .phead{padding:13px 92px 13px 15px;border-bottom:1px solid var(--line);background:#fff;position:relative}
+  .dlbtn{position:absolute;right:13px;top:12px;border:1px solid var(--line);background:#fff;color:var(--accent);
+    font-size:12px;font-weight:600;padding:5px 10px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+  .dlbtn:hover{border-color:var(--accent);background:#eef3fb}
+  .dlbtn[hidden]{display:none}
   .phead .code{font-size:12px;color:var(--muted);font-weight:600}
   .phead .nm{font-size:17px;font-weight:700;margin:2px 0 0}
   .phead .ct{font-size:13px;color:var(--muted);margin-top:3px}
@@ -127,7 +140,10 @@
 <div class="wrap">
   <div class="mapcol">
     <div class="toolbar">
-      <input id="search" type="text" placeholder="Search a species (e.g. Bobolink) to highlight regions">
+      <div class="searchbox">
+        <input id="search" type="text" autocomplete="off" placeholder="Search a species (e.g. Bobolink) to highlight regions">
+        <div class="suggest" id="suggest"></div>
+      </div>
     </div>
     <div class="searchnote" id="searchnote"></div>
     <div class="mapwrap">
@@ -158,6 +174,7 @@
   <div class="panelcol">
     <div class="panel">
       <div class="phead">
+        <button class="dlbtn" id="dlBtn" type="button" hidden>&#8615;&nbsp;Excel</button>
         <div class="code" id="pcode">Select a region</div>
         <div class="nm" id="pname">&nbsp;</div>
         <div class="ct" id="pct"></div>
@@ -376,6 +393,7 @@ function select(code){
   d3.select("#pname").text(r.name);
   d3.select("#legend2").style("display", isScale ? "none" : null);
   d3.select("#sortbar").style("display", null);
+  showDl(true);
   renderSpecies();
 }
 
@@ -387,6 +405,7 @@ function showSelectedOrEmpty(){
   d3.select("#legend2").style("display",null);
   d3.select("#sortbar").style("display",null);
   d3.select("#splist").html('<div class="empty">Click a region on the map, or a region listed below the map.</div>');
+  showDl(false);
 }
 
 // Species focus: show which BCRs a taxon is designated in, with breeding/nonbreeding,
@@ -426,6 +445,7 @@ function renderFocusPanel(name){
   d3.select("#pct").text(`${rows.length} BCR${rows.length!==1?"s":""} \u00b7 ${br} breeding, ${nb} nonbreeding`);
   d3.select("#legend2").style("display","none");
   d3.select("#sortbar").style("display","none");
+  showDl(true);
   const list=d3.select("#splist"); list.html("");
   list.append("div").attr("class","focusback").text("\u2039 Back to region view")
     .on("click",()=>{ speciesFocus=null; clearHighlights(); showSelectedOrEmpty(); });
@@ -550,12 +570,110 @@ function runSearch(){
     if(on){ n++; d3.select(this).raise(); }
   });
   const total=[...hitCodes].length;
-  note.html(`<b>${total}</b> region/list(s) contain a taxon matching &ldquo;${q}&rdquo;` +
+  const taxa=SP_INDEX.filter(s=>s.name.toLowerCase().includes(q)).length;
+  note.html(`<b>${total}</b> region/list${total!==1?"s":""} contain <b>${taxa}</b> tax${taxa!==1?"a":"on"} matching &ldquo;${q}&rdquo;` +
             (total>n?` (${total-n} off-map \u2014 see chips below)`:""));
   d3.selectAll(".chip").classed("on",function(){return hitCodes.has(this.getAttribute("data-chip"));});
   if(selected) renderSpecies();
 }
-d3.select("#search").on("input",runSearch);
+// --- species autocomplete dropdown -------------------------------------
+const SP_INDEX = (()=>{
+  const m=new Map();
+  Object.values(REGIONS).forEach(r=>{
+    r.species.forEach(s=>{
+      if(!m.has(s[0])) m.set(s[0],0);
+      if(r.kind==="bcr"||r.kind==="marine") m.set(s[0], m.get(s[0])+1);
+    });
+  });
+  return [...m.entries()].map(([name,n])=>({name,n})).sort((a,b)=>a.name.localeCompare(b.name));
+})();
+let suggIdx=-1;
+function renderSuggest(q){
+  const box=d3.select("#suggest");
+  const ql=(q||"").trim().toLowerCase();
+  if(!ql){ box.style("display","none").html(""); return; }
+  const hits=SP_INDEX.filter(s=>s.name.toLowerCase().includes(ql));
+  if(!hits.length){ box.style("display","none").html(""); return; }
+  box.html("").style("display","block");
+  hits.forEach(s=>{
+    const it=box.append("div").attr("class","sugg-item").attr("data-name",s.name)
+      .on("mousedown",(e)=>{ e.preventDefault(); pickSuggest(s.name); });
+    it.append("span").attr("class","sugg-nm").text(s.name);
+    it.append("span").attr("class","sugg-ct").text(s.n ? `${s.n} BCR${s.n!==1?"s":""}` : "scale list");
+  });
+  suggIdx=-1;
+}
+function pickSuggest(name){
+  d3.select("#suggest").style("display","none").html("");
+  focusSpecies(name);
+}
+function moveSugg(d){
+  const items=d3.select("#suggest").selectAll(".sugg-item");
+  const n=items.size(); if(!n) return;
+  suggIdx=(suggIdx+d+n)%n;
+  items.classed("active",(_,i)=>i===suggIdx);
+  const el=items.nodes()[suggIdx]; if(el) el.scrollIntoView({block:"nearest"});
+}
+d3.select("#search").on("input",function(){ runSearch(); renderSuggest(this.value); });
+d3.select("#search").on("keydown",function(e){
+  if(d3.select("#suggest").style("display")==="none") return;
+  if(e.key==="ArrowDown"){ e.preventDefault(); moveSugg(1); }
+  else if(e.key==="ArrowUp"){ e.preventDefault(); moveSugg(-1); }
+  else if(e.key==="Enter"){
+    const items=d3.select("#suggest").selectAll(".sugg-item").nodes();
+    const el = suggIdx>=0 ? items[suggIdx] : items[0];
+    if(el){ e.preventDefault(); pickSuggest(el.getAttribute("data-name")); }
+  } else if(e.key==="Escape"){ d3.select("#suggest").style("display","none"); }
+});
+d3.select("#search").on("blur",function(){ setTimeout(()=>d3.select("#suggest").style("display","none"),120); });
+
+// --- download current panel as .xlsx ----------------------------------
+function sanitize(s){ return (s||"").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,60); }
+function autoCols(aoa){
+  const nc=Math.max(0,...aoa.map(r=>r.length)); const w=[];
+  for(let c=0;c<nc;c++){ let m=8; aoa.forEach(r=>{ if(r[c]!=null) m=Math.max(m,String(r[c]).length+2); }); w.push({wch:Math.min(m,46)}); }
+  return w;
+}
+function downloadPanel(){
+  if(typeof XLSX==="undefined"){ alert("Spreadsheet library is still loading \u2014 please try again in a moment."); return; }
+  let aoa, fname, sheet;
+  if(speciesFocus){
+    const name=speciesFocus;
+    aoa=[["Birds of Conservation Concern 2021"],["Species: "+name],[],["Code","Region","Status"]];
+    [["CON","Continental","listed continent-wide"],
+     ["PVI","Puerto Rico & Virgin Islands","listed at this scale"],
+     ["HPI","Hawaii & Pacific Islands","listed at this scale"]].forEach(([code,label,st])=>{
+       if(REGIONS[code] && REGIONS[code].species.some(s=>s[0]===name)) aoa.push([code,label,st]);
+     });
+    const rows=[];
+    Object.entries(REGIONS).forEach(([code,r])=>{
+      if(r.kind==="scale") return;
+      const sp=r.species.find(s=>s[0]===name);
+      if(sp) rows.push({code,name:r.name,st:sp[1]});
+    });
+    rows.sort((a,b)=>((a.st==="nb")-(b.st==="nb"))||a.name.localeCompare(b.name));
+    rows.forEach(x=>aoa.push([x.code,x.name,x.st==="nb"?"Nonbreeding":"Breeding"]));
+    fname=`BCC2021_${sanitize(name)}_regions.xlsx`; sheet=(sanitize(name)||"Species").slice(0,28);
+  } else if(selected && REGIONS[selected]){
+    const r=REGIONS[selected], isScale=r.kind==="scale";
+    const label=isScale?"Continental / island-scale list":`BCR ${selected}${r.kind==="marine"?" (marine)":""}`;
+    aoa=[["Birds of Conservation Concern 2021"],[label+" \u2014 "+r.name],[]];
+    let items=r.species.slice();
+    if(!isScale && filterStatus) items=items.filter(([nm,st])=>(st==="nb"?"nb":"X")===filterStatus);
+    items.sort(sortMode==="tax"
+      ? (a,b)=>((a[2]??1e9)-(b[2]??1e9))||a[0].localeCompare(b[0])
+      : (a,b)=>a[0].localeCompare(b[0]));
+    if(isScale){ aoa.push(["Common name","Scientific name"]); items.forEach(s=>aoa.push([s[0],s[1]])); }
+    else { aoa.push(["Common name","Status","Taxonomic order"]);
+           items.forEach(s=>aoa.push([s[0],s[1]==="nb"?"Nonbreeding":"Breeding",s[2]??""])); }
+    fname=`BCC2021_${sanitize(label)}.xlsx`; sheet=(isScale?"Scale_list":sanitize("BCR_"+selected)).slice(0,28);
+  } else { return; }
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws["!cols"]=autoCols(aoa);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,sheet||"BCC2021");
+  XLSX.writeFile(wb,fname);
+}
+function showDl(on){ d3.select("#dlBtn").attr("hidden", on?null:true); }
+d3.select("#dlBtn").on("click",downloadPanel);
 </script>
 </body>
 </html>
