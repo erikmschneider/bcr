@@ -39,6 +39,19 @@
   .mapopts .seg{padding:3px 9px;font-size:11px}
   .mo-check{display:flex;align-items:center;gap:6px;cursor:pointer}
   .mo-check input{cursor:pointer}
+  @media (max-width: 640px){
+    header{padding:14px 16px 8px}
+    h1{font-size:18px}
+    .sub{font-size:12.5px}
+    .wrap{padding:8px 14px 24px; gap:14px}
+    .mapcol{min-width:0; flex-basis:100%}
+    .panelcol{min-width:0; flex-basis:100%; max-width:none}
+    .mapopts{position:static; right:auto; bottom:auto; max-width:none; width:auto;
+      margin-top:10px; flex-direction:row; flex-wrap:wrap; align-items:center;
+      column-gap:18px; row-gap:9px; background:#fff; backdrop-filter:none;
+      box-shadow:none; border:1px solid var(--line)}
+    .mapopts .mo-title{width:100%}
+  }
   .st{fill:none;stroke:#3c4654;stroke-width:.7;stroke-opacity:.75;pointer-events:none}
   .stlbl{font-size:8px;font-weight:700;fill:#2a2f37;text-anchor:middle;pointer-events:none;
          paint-order:stroke;stroke:#fff;stroke-width:2.4px;stroke-linejoin:round}
@@ -53,7 +66,10 @@
   .bcr:hover{stroke:#222;stroke-width:1.2}
   .bcr.selected{stroke:#111;stroke-width:1.8}
   .bcr.match{stroke:var(--hi);stroke-width:2}
+  .bcr.breed-hl{stroke:var(--breed);stroke-width:2.4}
+  .bcr.nb-hl{stroke:var(--nonbreed);stroke-width:2.4}
   .bcr.dim{opacity:.25}
+  .chip.hoverhl{box-shadow:0 0 0 2px var(--accent)}
   .lbl{font-size:9px;font-weight:700;fill:#1a1a1a;pointer-events:none;text-anchor:middle}
   #map.nolbl .lbl{display:none}
   .lbl.light{fill:#fff}
@@ -79,6 +95,8 @@
   .legend2 .fhint:hover{color:var(--ink);text-decoration:underline}
   .breed{background:var(--breedbg);color:var(--breed)}
   .nonbreed{background:var(--nonbreedbg);color:var(--nonbreed)}
+  .conbadge{background:#E7ECF5;color:#1F3864}
+  .conrow{background:#fbfcfe}
   .sortbar{display:flex;align-items:center;gap:7px;padding:8px 15px;border-bottom:1px solid var(--line);background:#fff;font-size:12px}
   .sortbar .sortlbl{color:var(--muted);margin-right:2px}
   .seg{cursor:pointer;padding:3px 11px;border:1px solid var(--line);border-radius:13px;user-select:none;transition:background .1s,border-color .1s}
@@ -92,6 +110,8 @@
   .sprow .sci{font-size:12.5px;color:var(--muted);font-style:italic;white-space:nowrap;margin-left:10px}
   .sprow.hit{background:#fff4ee}
   .empty{padding:22px 15px;color:var(--muted);font-size:14px}
+  .focusback{padding:8px 15px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--accent);cursor:pointer;font-weight:600}
+  .focusback:hover{text-decoration:underline;background:#eef3fb}
   .tip{position:fixed;pointer-events:none;background:#1d2733;color:#fff;font-size:12px;
        padding:5px 9px;border-radius:6px;opacity:0;transition:opacity .08s;z-index:10}
   .foot{font-size:11px;color:var(--muted);padding:0 22px 22px;max-width:900px}
@@ -186,6 +206,7 @@ function fillFor(d){
 
 const tip=d3.select("#tip");
 let selected=null;
+let speciesFocus=null;
 
 const view=svg.append("g").attr("class","view");
 const gPaths=view.append("g");
@@ -332,7 +353,17 @@ chipRow("Continental & island-scale BCC lists", scaleCodes);
 
 let filterStatus=null;  // null = all, 'X' = breeding only, 'nb' = nonbreeding only
 
+function clearHighlights(){
+  d3.selectAll(".bcr").classed("match",false).classed("dim",false)
+    .classed("breed-hl",false).classed("nb-hl",false).classed("selected",false);
+  d3.selectAll(".chip").classed("on",false);
+}
+
 function select(code){
+  clearHighlights();
+  speciesFocus=null;
+  d3.select("#search").property("value","");
+  d3.select("#searchnote").text("");
   selected=code;
   d3.selectAll(".bcr").classed("selected",function(){return this.getAttribute("data-code")===code;});
   d3.selectAll(".chip").classed("on",function(){return this.getAttribute("data-chip")===code;});
@@ -343,7 +374,98 @@ function select(code){
                                    : `BCR ${code}${r.kind==="marine"?" (marine)":""}`);
   d3.select("#pname").text(r.name);
   d3.select("#legend2").style("display", isScale ? "none" : null);
+  d3.select("#sortbar").style("display", null);
   renderSpecies();
+}
+
+function showSelectedOrEmpty(){
+  if(selected){ select(selected); return; }
+  d3.select("#pcode").text("Select a region");
+  d3.select("#pname").html("&nbsp;");
+  d3.select("#pct").text("");
+  d3.select("#legend2").style("display",null);
+  d3.select("#sortbar").style("display",null);
+  d3.select("#splist").html('<div class="empty">Click a region on the map, or a region listed below the map.</div>');
+}
+
+// Species focus: show which BCRs a taxon is designated in, with breeding/nonbreeding,
+// and outline those regions on the map (green = breeding, amber = nonbreeding).
+function focusSpecies(name){
+  if(speciesFocus===name){ speciesFocus=null; clearHighlights(); showSelectedOrEmpty(); return; }
+  clearHighlights();
+  speciesFocus=name;
+  d3.select("#search").property("value","");
+  d3.select("#searchnote").text("");
+  d3.selectAll(".bcr").each(function(){
+    const r=REGIONS[this.getAttribute("data-code")];
+    const sp=r&&r.species.find(s=>s[0]===name);
+    const sel=d3.select(this);
+    if(sp){ sel.classed(sp[1]==="nb"?"nb-hl":"breed-hl",true); sel.raise(); }
+    else sel.classed("dim",true);
+  });
+  d3.selectAll(".chip").each(function(){
+    const r=REGIONS[this.getAttribute("data-chip")];
+    const sp=r&&r.species.find(s=>s[0]===name);
+    d3.select(this).classed("on",!!sp);
+  });
+  renderFocusPanel(name);
+}
+
+function renderFocusPanel(name){
+  const rows=[];
+  Object.entries(REGIONS).forEach(([code,r])=>{
+    if(r.kind==="scale") return;
+    const sp=r.species.find(s=>s[0]===name);
+    if(sp) rows.push({code,name:r.name,marine:r.kind==="marine",st:sp[1]});
+  });
+  rows.sort((a,b)=>((a.st==="nb")-(b.st==="nb"))||a.name.localeCompare(b.name));
+  const br=rows.filter(x=>x.st!=="nb").length, nb=rows.length-br;
+  d3.select("#pcode").text("Species \u2014 occurs in these BCRs");
+  d3.select("#pname").text(name);
+  d3.select("#pct").text(`${rows.length} BCR${rows.length!==1?"s":""} \u00b7 ${br} breeding, ${nb} nonbreeding`);
+  d3.select("#legend2").style("display","none");
+  d3.select("#sortbar").style("display","none");
+  const list=d3.select("#splist"); list.html("");
+  list.append("div").attr("class","focusback").text("\u2039 Back to region view")
+    .on("click",()=>{ speciesFocus=null; clearHighlights(); showSelectedOrEmpty(); });
+  [["CON","Continental \u2014 listed continent-wide","continental"],
+   ["PVI","Puerto Rico & Virgin Islands","PR & VI"],
+   ["HPI","Hawaii & Pacific Islands","Hawaii/Pacific"]].forEach(([code,label,badge])=>{
+    if(REGIONS[code] && REGIONS[code].species.some(s=>s[0]===name)){
+      const row=list.append("div").attr("class","sprow conrow").on("click",()=>select(code))
+        .on("mouseenter",()=>highlightRegion(code,true))
+        .on("mouseleave",()=>highlightRegion(code,false));
+      row.append("span").text(label);
+      row.append("span").attr("class","b conbadge").text(badge);
+    }
+  });
+  if(!rows.length){ list.append("div").attr("class","empty").text("Not designated in any BCR."); return; }
+  rows.forEach(x=>{
+    const row=list.append("div").attr("class","sprow")
+      .on("click",()=>select(x.code))
+      .on("mouseenter",()=>highlightRegion(x.code,true))
+      .on("mouseleave",()=>highlightRegion(x.code,false));
+    row.append("span").text(`${x.marine?"":"BCR "}${x.code} \u00b7 ${x.name}`);
+    row.append("span").attr("class","b "+(x.st==="nb"?"nonbreed":"breed"))
+       .text(x.st==="nb"?"nonbreeding":"breeding");
+  });
+}
+
+function highlightRegion(code,on){
+  const p=gPaths.select(`path[data-code="${code}"]`);
+  if(!p.empty()){
+    if(on){
+      const nb = p.classed("nb-hl");
+      const base = nb ? "#854F0B" : p.classed("breed-hl") ? "#0F6E56" : (p.attr("fill")||"#888");
+      const lc = d3.hsl(base); lc.l = Math.min(0.78, lc.l + 0.40); lc.s = lc.s * 0.40;
+      if(nb){ lc.h = 43; lc.s = Math.max(lc.s, 0.52); lc.l = Math.min(lc.l, 0.70); }
+      p.style("stroke", lc.formatHex()).style("stroke-width", 3).raise();
+    } else {
+      p.style("stroke", null).style("stroke-width", null);
+    }
+  }
+  d3.selectAll(".chip").filter(function(){return this.getAttribute("data-chip")===code;})
+    .classed("hoverhl",on);
 }
 
 function renderSpecies(){
@@ -379,11 +501,7 @@ function renderSpecies(){
   items.forEach(([nm,st])=>{
     const hit=q&&nm.toLowerCase().includes(q);
     const row=list.append("div").attr("class","sprow"+(hit?" hit":""))
-      .on("click",()=>{
-        const cur=d3.select("#search").property("value");
-        d3.select("#search").property("value", cur===nm ? "" : nm);
-        runSearch();
-      });
+      .on("click",()=>focusSpecies(nm));
     row.append("span").text(nm);
     if(isScale){
       row.append("span").attr("class","sci").text(st);
@@ -414,8 +532,12 @@ d3.select("#sortTax").on("click",()=>setSort("tax"));
 function runSearch(){
   const q=(d3.select("#search").property("value")||"").trim().toLowerCase();
   const note=d3.select("#searchnote");
-  if(!q){ d3.selectAll(".bcr").classed("match",false).classed("dim",false); note.text("");
-          if(selected)select(selected); return; }
+  speciesFocus=null;
+  if(!q){ clearHighlights(); note.text("");
+          d3.selectAll(".bcr").classed("selected",function(){return this.getAttribute("data-code")===selected;});
+          d3.selectAll(".chip").classed("on",function(){return this.getAttribute("data-chip")===selected;});
+          reRaiseSelected(); if(selected) renderSpecies(); return; }
+  d3.selectAll(".bcr").classed("breed-hl",false).classed("nb-hl",false).classed("selected",false);
   let n=0; const hitCodes=new Set();
   Object.entries(REGIONS).forEach(([code,r])=>{
     if(r.species.some(s=>s[0].toLowerCase().includes(q))) hitCodes.add(code);
@@ -426,12 +548,11 @@ function runSearch(){
     d3.select(this).classed("match",on).classed("dim",!on);
     if(on){ n++; d3.select(this).raise(); }
   });
-  // include AK/marine chip hits in the count
   const total=[...hitCodes].length;
   note.html(`<b>${total}</b> region/list(s) contain a taxon matching &ldquo;${q}&rdquo;` +
             (total>n?` (${total-n} off-map \u2014 see chips below)`:""));
   d3.selectAll(".chip").classed("on",function(){return hitCodes.has(this.getAttribute("data-chip"));});
-  if(selected)select(selected);
+  if(selected) renderSpecies();
 }
 d3.select("#search").on("input",runSearch);
 </script>
