@@ -238,7 +238,7 @@ gPaths.selectAll("path").data(GEO.features).join("path")
        .html(`<b>BCR ${d.properties.code} &middot; ${d.properties.name}</b><br>${d.properties.count} BCC taxa`);
   })
   .on("mouseleave",()=>{ tip.style("opacity",0); reRaiseSelected(); })
-  .on("click",(e,d)=>select(d.properties.code));
+  .on("click",(e,d)=>{ select(d.properties.code); maybeScrollPanel(); });
 
 // labels in their own layer above the polygons, so raising a polygon never hides them
 const gLabels=view.append("g");
@@ -362,7 +362,7 @@ function chipRow(title, codes){
     const label=r.kind==="scale" ? `${r.name} (${r.count})`
                                   : `BCR ${c} \u00b7 ${r.name} (${r.count})`;
     wrap.append("span").attr("class","chip").attr("data-chip",c).text(label)
-      .on("click",()=>select(c));
+      .on("click",()=>{ select(c); maybeScrollPanel(); });
   });
 }
 chipRow("Alaska BCRs (not drawn on map)", akCodes);
@@ -395,6 +395,7 @@ function select(code){
   d3.select("#sortbar").style("display", null);
   showDl(true);
   renderSpecies();
+  setHash({region:code});
 }
 
 function showSelectedOrEmpty(){
@@ -406,6 +407,7 @@ function showSelectedOrEmpty(){
   d3.select("#sortbar").style("display",null);
   d3.select("#splist").html('<div class="empty">Click a region on the map, or a region listed below the map.</div>');
   showDl(false);
+  setHash({});
 }
 
 // Species focus: show which BCRs a taxon is designated in, with breeding/nonbreeding,
@@ -429,6 +431,7 @@ function focusSpecies(name){
     d3.select(this).classed("on",!!sp);
   });
   renderFocusPanel(name);
+  setHash({species:name});
 }
 
 function renderFocusPanel(name){
@@ -587,6 +590,7 @@ const SP_INDEX = (()=>{
   });
   return [...m.entries()].map(([name,n])=>({name,n})).sort((a,b)=>a.name.localeCompare(b.name));
 })();
+const SP_NAMES = new Set(SP_INDEX.map(s=>s.name));
 let suggIdx=-1;
 function renderSuggest(q){
   const box=d3.select("#suggest");
@@ -606,6 +610,7 @@ function renderSuggest(q){
 function pickSuggest(name){
   d3.select("#suggest").style("display","none").html("");
   focusSpecies(name);
+  maybeScrollPanel();
 }
 function moveSugg(d){
   const items=d3.select("#suggest").selectAll(".sugg-item");
@@ -674,6 +679,33 @@ function downloadPanel(){
 }
 function showDl(on){ d3.select("#dlBtn").attr("hidden", on?null:true); }
 d3.select("#dlBtn").on("click",downloadPanel);
+
+// --- shareable deep-links (URL hash) ----------------------------------
+function setHash(obj){
+  let h="";
+  if(obj.species) h="#species="+encodeURIComponent(obj.species);
+  else if(obj.region) h="#region="+encodeURIComponent(obj.region);
+  if(h){ if(location.hash!==h) location.hash=h; }
+  else if(location.hash){ history.replaceState(null,"",location.pathname+location.search); }
+}
+function applyHash(){
+  const p=new URLSearchParams(location.hash.replace(/^#/,""));
+  const sp=p.get("species"), rg=p.get("region");
+  if(sp && SP_NAMES.has(sp)){ if(speciesFocus!==sp) focusSpecies(sp); }
+  else if(rg && REGIONS[rg]){ if(selected!==rg || speciesFocus) select(rg); }
+}
+window.addEventListener("hashchange",applyHash);
+
+// --- scroll the results panel into view on small screens --------------
+function maybeScrollPanel(){
+  if(window.matchMedia("(max-width: 640px)").matches){
+    const el=document.querySelector(".panel");
+    if(el) el.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+}
+
+// restore any shared view from the URL on first load
+applyHash();
 </script>
 </body>
 </html>
