@@ -192,7 +192,7 @@
         <button class="dlbtn" id="dlBtn" type="button" hidden>&#8615;&nbsp;Excel</button>
         <div class="code" id="pcode"></div>
         <div class="nm" id="pname">Select a region</div>
-        <div class="ct" id="pct">Click a region on the map, or a region listed below the map.</div>
+        <div class="ct" id="pct">Click a region on the map, or a region listed below.</div>
       </div>
       <div class="legend2" id="legend2" style="display:none">
         <span class="b breed filt" id="filBreed">breeding</span>
@@ -441,7 +441,7 @@ function showSelectedOrEmpty(){
   if(selected){ select(selected); return; }
   d3.select("#pcode").text("");
   d3.select("#pname").text("Select a region");
-  d3.select("#pct").text("Click a region on the map, or a region listed below the map.");
+  d3.select("#pct").text("Click a region on the map, or a region listed below.");
   d3.select("#legend2").style("display","none");
   d3.select("#groupfilter").style("display","none");
   d3.select("#sortbar").style("display","none");
