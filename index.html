@@ -378,6 +378,7 @@ function clearHighlights(){
 }
 
 function select(code){
+  if(code===selected && !speciesFocus){ goHome(); return; }
   clearHighlights();
   speciesFocus=null;
   d3.select("#search").property("value","");
@@ -408,6 +409,16 @@ function showSelectedOrEmpty(){
   d3.select("#splist").html('<div class="empty">Click a region on the map, or a region listed below the map.</div>');
   showDl(false);
   setHash({});
+}
+
+// fully deselect and return to the overview ("home") map
+function goHome(){
+  selected=null; speciesFocus=null;
+  clearHighlights();
+  d3.select("#search").property("value","");
+  d3.select("#searchnote").text("");
+  d3.select("#suggest").style("display","none").html("");
+  showSelectedOrEmpty();
 }
 
 // Species focus: show which BCRs a taxon is designated in, with breeding/nonbreeding,
