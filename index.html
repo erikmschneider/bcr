@@ -242,9 +242,12 @@ gPaths.selectAll("path").data(GEO.features).join("path")
 
 // labels in their own layer above the polygons, so raising a polygon never hides them
 const gLabels=view.append("g");
+// per-BCR nudges to the number label position, in map units [dx,dy] (dy+ = south/down)
+const NUMOFF={"27":[7,11],"24":[6,-6],"12":[10,0],"29":[4,0],"9":[0,7],"11":[0,-7],"23":[-5,0]};
+function numXY(d){const c=path.centroid(d);const o=NUMOFF[String(d.properties.code)]||[0,0];return [c[0]+o[0],c[1]+o[1]];}
 gLabels.selectAll("text.lbl").data(GEO.features).join("text")
   .attr("class","lbl")
-  .attr("transform",d=>{const c=path.centroid(d);return `translate(${c[0]},${c[1]})`;})
+  .attr("transform",d=>{const c=numXY(d);return `translate(${c[0]},${c[1]})`;})
   .attr("dy","0.32em").text(d=>d.properties.code)
   .style("display",d=>{const b=path.bounds(d);return (b[1][0]-b[0][0])<14?"none":null;});
 
@@ -306,7 +309,7 @@ function declutter(){
   if(d3.select("#lblToggle").property("checked")){
     gLabels.selectAll("text.lbl").each(function(d){
       if(this.style.display==="none") return;
-      const c=path.centroid(d), t=this.textContent, w=t.length*9*0.62, h=9;
+      const c=numXY(d), t=this.textContent, w=t.length*9*0.62, h=9;
       placed.push({x:c[0]-w/2,y:c[1]-h/2,w,h});
     });
   }
