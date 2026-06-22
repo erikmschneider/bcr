@@ -143,6 +143,8 @@
   .tip{position:fixed;pointer-events:none;background:#1d2733;color:#fff;font-size:12px;
        padding:5px 9px;border-radius:6px;opacity:0;transition:opacity .08s;z-index:10}
   .foot{font-size:11px;color:var(--muted);padding:0 22px 22px;max-width:900px}
+  .foot a{color:var(--accent);font-weight:600;text-decoration:none}
+  .foot a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
@@ -220,7 +222,8 @@ printed total by one, consistent with minor internal inconsistencies in the sour
 are not drawn because the supplied shapefile projection corrupted those two polygons; their species lists are still
 available via the chips below the map. Continental (CON) and island-scale (Puerto Rico &amp; Virgin
 Islands; Hawaii &amp; Pacific Islands) BCC lists are taken from the USFWS BCC 2021 master list and shown
-as separate chips, since those designations apply at a geographic scale broader than a single BCR.</div>
+as separate chips, since those designations apply at a geographic scale broader than a single BCR.
+<br><br>Source: U.S. Fish and Wildlife Service, <a href="https://www.fws.gov/media/birds-conservation-concern-2021" target="_blank" rel="noopener">Birds of Conservation Concern 2021</a>.</div>
 <div class="tip" id="tip"></div>
 
 <script>
